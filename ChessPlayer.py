@@ -2,43 +2,42 @@ import json
 import time
 import chess
 import chess.engine
+import asyncio
 
 JSON_FILE_PATH = "game_data.json"
 STOCKFISH_PATH = "stockfish/stockfish.exe"
+currentmoves = 0
 
 def initialize_board():
-    engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH)
-    board = chess.Board()
-    return engine, board
+    try:
+        engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH)
+        board = chess.Board()
+        return engine, board
+    except Exception as e:
+        print(f"Error initializing Stockfish engine: {e}")
+        exit(1)
 
-# Use your provided conversion function
 def square_to_chess_notation(square_id):
-    if square_id[0] == "1":
-        result = f"a{square_id[1]}"
-    elif square_id[0] == "2":
-        result = f"b{square_id[1]}"
-    elif square_id[0] == "3":
-        result = f"c{square_id[1]}"
-    elif square_id[0] == "4":
-        result = f"d{square_id[1]}"
-    elif square_id[0] == "5":
-        result = f"e{square_id[1]}"
-    elif square_id[0] == "6":
-        result = f"f{square_id[1]}"
-    elif square_id[0] == "7":
-        result = f"g{square_id[1]}"
-    elif square_id[0] == "8":
-        result = f"h{square_id[1]}"
-    return result
+    """Converts square_id like '12' to proper chess notation."""
+    file_map = "abcdefgh"
+    rank = square_id[1]
+    file = file_map[int(square_id[0]) - 1]  # Convert '1' to 'a', '2' to 'b', etc.
+    return f"{file}{rank}"
 
-# Convert move to chess notation (e.g., "square-57square-56" to "e7e6")
-def convert_to_chess_move(from_square, to_square):
-    from_square_chess = square_to_chess_notation(from_square)
-    to_square_chess = square_to_chess_notation(to_square)
-    return f"{from_square_chess}{to_square_chess}"
+def square_trans(gg):
+    """Parses and converts game move strings."""
+    try:
+        g1 = gg.split('square')[1].split('-')[1]
+        g2 = gg.split('square')[2].split('-')[1]
+        first = square_to_chess_notation(g1)
+        second = square_to_chess_notation(g2)
+        return f"{first}{second}"
+    except Exception as e:
+        print(f"Error parsing move string '{gg}': {e}")
+        return None
 
-# Load game data from the JSON file
 def load_game_data():
+    """Loads game data from the JSON file."""
     try:
         with open(JSON_FILE_PATH, "r") as file:
             return json.load(file)
@@ -46,81 +45,52 @@ def load_game_data():
         print(f"Error loading JSON file: {e}")
         return None
 
-# Reverse a move for the opponent
 def reverse_move(chess_move):
     return chess_move[2:4] + chess_move[0:2]
 
-# Process the moves from JSON and push them to the board
-def process_moves_and_push(engine, board, processed_moves, player_color):
-    game_data = load_game_data()
-    if not game_data:
-        print("No game data found.")
-        return processed_moves  # Return unprocessed moves set
+async def make_move():
+    print('move')
 
-    if game_data.get("gameStarted"):
-        # Get the moves list from the JSON
-        moves = game_data.get("moves", [])
-        
-        move_count = len(moves)  # Number of moves detected
 
-        # For each move, check whether it's the player's turn or opponent's turn
-        for move in moves:
-            move_string = move["move"]
-            from_square = move_string.split("square-")[1].split("square-")[0]
-            to_square = move_string.split("square-")[2]
-
-            # Convert move to chess notation
-            chess_move = convert_to_chess_move(from_square, to_square)
-            print(f"Detected move: {chess_move}")
-            
-            # Determine whose turn it is based on the move count
-            if (move_count % 2 == 0 and player_color == "white") or (move_count % 2 == 1 and player_color == "black"):
-                # It's the player's turn to move
-                if chess_move not in processed_moves:
-                    try:
-                        if board.is_legal(chess.Move.from_uci(chess_move)):
-                            board.push(chess.Move.from_uci(chess_move))
-                            processed_moves.add(chess_move)  # Add to processed moves
-                            print(f"Move pushed: {chess_move}")
-                        else:
-                            print(f"Illegal move detected: {chess_move}")
-                    except Exception as e:
-                        print(f"Error processing move: {e}")
-            else:
-                # It's the opponent's turn, reverse the move
-                reversed_move = reverse_move(chess_move)
-                if reversed_move not in processed_moves:
-                    try:
-                        if board.is_legal(chess.Move.from_uci(reversed_move)):
-                            board.push(chess.Move.from_uci(reversed_move))
-                            processed_moves.add(reversed_move)  # Add to processed moves
-                            print(f"Opponent's move reversed and pushed: {reversed_move}")
-                        else:
-                            print(f"Illegal reversed move detected: {reversed_move}")
-                    except Exception as e:
-                        print(f"Error processing reversed move: {e}")
-
-    return processed_moves  # Return updated set of processed moves
-
-def main():
-    engine, board = initialize_board()
-    
-    processed_moves = set()  # To track moves that have already been processed
-    player_color = None  # We'll determine this from the JSON file
-
+async def detect_new_moves(processed_moves, color):
+    first_move = True
+    global currentmoves
     while True:
+        print('lol')
         game_data = load_game_data()
-        if game_data and "playerColor" in game_data:
-            player_color = game_data["playerColor"]
-            print(f"Your color: {player_color}")
+        if not game_data or not game_data.get("gameStarted"):
+            time.sleep(1)
+            continue
+        moves = game_data.get("moves", [])
+        for move in moves:
+            first_move = False
+            move_string = move.get("move")
+            if move_string and move_string not in processed_moves:
+                move_notation = square_trans(move_string)
+                if move_notation:
+                    if currentmoves % 2 <= 0:
+                        new_notation = reverse_move(move_notation)
+                        print(f"New move detected: {new_notation}")
+                        print("Now White move") #black did the move
+                    else:
+                        print(f"New move detected: {move_notation}")
+                        print("Now blacks move") #white did the move
+                    currentmoves += 1
+                    processed_moves.add(move_string)
+        
+        if first_move:
+            if color == "white":
+                currentmoves += 1
+                print('our First move')
+                first_move = False
+                await make_move()
 
-        # Process moves from JSON and push them to the board
-        processed_moves = process_moves_and_push(engine, board, processed_moves, player_color)
-        
-        # If no new moves detected, print a message and wait for the next update
-        print("Waiting for the next update...")
-        
-        time.sleep(1)  # Check the JSON file every 1 second
+        time.sleep(1)
+
+async def main():
+    processed_moves = set()
+    engine, board = initialize_board()
+    await detect_new_moves(processed_moves, "black")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
