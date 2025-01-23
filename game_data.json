@@ -1,0 +1,10 @@
+{
+    "gameStarted": false,
+    "playerColor": "",
+    "moves": [
+        {
+            "color": "",
+            "move": "square-37square-36"
+        }
+    ]
+}
