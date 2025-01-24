@@ -4,3 +4,7 @@
 
 
  - making this repo public so if anyone wanna continue making this they can :>
+
+- if u wanna know what problems it has dm me on discord or shi
+
+- discord - pro_ai
